@@ -127,25 +127,28 @@ void dcaHistsOptimal(int mode = 2)
       }
 
       // calculate the yield of background in three regions
-      // I do not use the right band, since the relative uncertainty is larger than the left and the peak
-      // for now, peak region has 6 sigma range, left side has 6 sigma range
       std::map<std::string, double> yield;
       std::map<std::string, double> yieldError;
       yield["left_side"] = bkg.Integral(ana::left_side_min, ana::left_side_max);
       yield["peak"] = bkg.Integral(ana::peak_min, ana::peak_max);
-      //yield["right_side"] = bkg.Integral(ana::right_side_min, ana::right_side_max);
+      yield["right_side"] = bkg.Integral(ana::right_side_min, ana::right_side_max);
       yieldError["left_side"] = bkg.IntegralError(ana::left_side_min, ana::left_side_max, 0, covMat.GetMatrixArray());
       yieldError["peak"] = bkg.IntegralError(ana::peak_min, ana::peak_max, 0, covMat.GetMatrixArray());
-      //yieldError["right_side"] = bkg.IntegralError(ana::right_side_min, ana::right_side_max, 0, covMat.GetMatrixArray());
-      //for(auto& element : yield) std::cout << element.second << std::endl;
-      //for(auto& element : yieldError) std::cout << element.second << std::endl;
+      yieldError["right_side"] = bkg.IntegralError(ana::right_side_min, ana::right_side_max, 0, covMat.GetMatrixArray());
+      for(auto& element : yield) std::cout << element.second << std::endl;
+      for(auto& element : yieldError) std::cout << element.second << std::endl;
       
       // calculate the signal-to-sideband ratio
       // propagate the error
-      double ratio = yield["peak"] / yield["left_side"];
-      double relRatioError = std::sqrt(
+      double ratioLeft = yield["peak"] / yield["left_side"];
+      double relRatioErrorLeft = std::sqrt(
             std::pow(yieldError["peak"]/yield["peak"], 2) + std::pow(yieldError["left_side"]/yield["left_side"], 2));
-      double absRatioError = ratio* relRatioError;
+      double absRatioErrorLeft = ratioLeft* relRatioErrorLeft;
+
+      double ratioRight = yield["peak"] / yield["right_side"];
+      double relRatioErrorRight = std::sqrt(
+            std::pow(yieldError["peak"]/yield["peak"], 2) + std::pow(yieldError["right_side"]/yield["right_side"], 2));
+      double absRatioErrorRight = ratioRight* relRatioErrorRight;
 
       // extract dca of left side band 
       TCanvas cLeftSide("cLeftSide", "", 550, 450);
@@ -158,6 +161,18 @@ void dcaHistsOptimal(int mode = 2)
       hDcaLeft_Proj->Draw("SAME");
       cLeftSide.Print(Form("%sPic/mva%d/cLeftSide.png", ana::whichtree[mode].c_str(), iMva));
       hDcaLeft_Proj->Delete();
+
+      // extract dca of right side band 
+      TCanvas cRightSide("cRightSide", "", 550, 450);
+      cRightSide.SetLogy();
+      TH1D hDcaRight("hDcaRightSide", "hDcaRightSide", ana::nuofDca, ana::dcaBin);
+      TH1D* hDcaRight_Proj = hDcaData(hDcaVsMassAndMvaDataD0, hDcaRight, mvaCut, "hDcaRightSide_Proj", ana::right_side_min, ana::right_side_max);
+      hDcaRight.Draw();
+      hDcaRight_Proj->Scale(hDcaRight.GetMaximum()/hDcaRight_Proj->GetMaximum());
+      hDcaRight_Proj->SetLineColor(kRed);
+      hDcaRight_Proj->Draw("SAME");
+      cRightSide.Print(Form("%sPic/mva%d/cRightSide.png", ana::whichtree[mode].c_str(), iMva));
+      hDcaRight_Proj->Delete();
 
       // extract dca of peak
       TCanvas cPeak("cPeak", "", 550, 450);
@@ -173,26 +188,41 @@ void dcaHistsOptimal(int mode = 2)
 
       // scale the left-side by signal-to-sideband ratio
       for(int iDca=0; iDca<ana::nuofDca; iDca++){
-         double yield = ratio * hDcaLeft.GetBinContent(iDca+1);
-         double yieldErr = std::sqrt(std::pow(absRatioError* hDcaLeft.GetBinContent(iDca+1), 2) +
-               std::pow(ratio* hDcaLeft.GetBinError(iDca+1), 2));
+         double yield = ratioLeft * hDcaLeft.GetBinContent(iDca+1);
+         double yieldErr = std::sqrt(std::pow(absRatioErrorLeft* hDcaLeft.GetBinContent(iDca+1), 2) +
+               std::pow(ratioLeft* hDcaLeft.GetBinError(iDca+1), 2));
          hDcaLeft.SetBinContent(iDca+1, yield);
          hDcaLeft.SetBinError(iDca+1, yieldErr);
       }
 
-      // compare dca of peak and left-side
-      TCanvas cPeakAndLeft("cPeakAndLeft", "", 550, 450);
-      cPeakAndLeft.SetLogy();
+      // scale the right-side by signal-to-sideband ratio
+      for(int iDca=0; iDca<ana::nuofDca; iDca++){
+         double yield = ratioRight * hDcaRight.GetBinContent(iDca+1);
+         double yieldErr = std::sqrt(std::pow(absRatioErrorRight* hDcaRight.GetBinContent(iDca+1), 2) +
+               std::pow(ratioRight* hDcaRight.GetBinError(iDca+1), 2));
+         hDcaRight.SetBinContent(iDca+1, yield);
+         hDcaRight.SetBinError(iDca+1, yieldErr);
+      }
+
+      // average two sides
+      TH1D hDcaSides(hDcaLeft);
+      hDcaSides.SetName("hDcaSides");
+      hDcaSides.Add(&hDcaRight);
+      hDcaSides.Scale(0.5);
+
+      // compare dca of peak and side band
+      TCanvas cPeakAndSides("cPeakAndSides", "", 550, 450);
+      cPeakAndSides.SetLogy();
       hDcaPeak.SetMarkerStyle(20);
       hDcaPeak.Draw("E P");
-      hDcaLeft.Draw("E SAME");
-      cPeakAndLeft.Print(Form("%sPic/mva%d/cDcaPeakAndLeftSide.png", ana::whichtree[mode].c_str(), iMva));
+      hDcaSides.Draw("E SAME");
+      cPeakAndSides.Print(Form("%sPic/mva%d/cDcaPeakAndSides.png", ana::whichtree[mode].c_str(), iMva));
 
       TCanvas cSignal("cSignal", "", 550, 450);
       cSignal.SetLogy();
       TH1D* hDcaPeakSignal = (TH1D*) hDcaPeak.Clone();
       hDcaPeakSignal->SetName("hDcaPeakSignal");
-      hDcaPeakSignal->Add(&hDcaLeft, -1);
+      hDcaPeakSignal->Add(&hDcaSides, -1);
       hDcaPeakSignal->Draw();
       hDcaDataD0.Draw("same");
       cSignal.Print(Form("%sPic/mva%d/cSignalSideBand.png", ana::whichtree[mode].c_str(), iMva));

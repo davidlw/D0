@@ -45,8 +45,11 @@ void dcaFractionFitting(TH1* hData, TObjArray& mc,
    covMat.Print();
 
    TCanvas cDca("cDca", "", 550, 450);
-   cDca.SetLeftMargin(0.16);
-   cDca.SetBottomMargin(0.16);
+   cDca.Divide(1, 2, 0, 0);
+   auto pad1 = cDca.cd(1);
+   pad1->SetBorderSize(0);
+   pad1->SetLeftMargin(0.16);
+   pad1->SetBottomMargin(0.);
 
    gStyle->SetErrorX(0);
 
@@ -64,21 +67,9 @@ void dcaFractionFitting(TH1* hData, TObjArray& mc,
    fit.GetResult(0, fracNPD0, fracErrNPD0);
    fit.GetResult(1, fracPD0, fracErrPD0);
 
-   /*
-   hD0DcaMCNPSignal->Scale(fracNPD0);
-   hD0DcaMCPSignal->Scale(fracPD0);
-   std::cout << hD0DcaMCNPSignal->GetBinContent(1) << std::endl;
-   std::cout << hD0DcaMCPSignal->GetBinContent(1) << std::endl;
-   hD0DcaMCNPSignal->SetFillColor(kBlue);
-   hD0DcaMCNPSignal->SetFillStyle(1001);
-   hD0DcaMCPSignal->SetFillColor(kRed);
-   hD0DcaMCPSignal->SetFillStyle(1001);
-   */
-
    TH1D* hMCPredctionNPD0 = (TH1D*) fit.GetMCPrediction(0);
    hMCPredctionNPD0->Scale(fracNPD0);
    hMCPredctionNPD0->SetFillColor(kBlue);
-   //hMCPredctionNPD0->SetFillStyle(1001);
    hMCPredctionNPD0->SetFillStyle(3001);
    TH1D* hMCPredctionPD0 = (TH1D*) fit.GetMCPrediction(1);
    hMCPredctionPD0->Scale(fracPD0);
@@ -86,8 +77,6 @@ void dcaFractionFitting(TH1* hData, TObjArray& mc,
    hMCPredctionPD0->SetFillStyle(1001);
 
    THStack hs("hs", "");
-   //hs.Add(hD0DcaMCPSignal);
-   //hs.Add(hD0DcaMCNPSignal);
    hs.Add(hMCPredctionPD0);
    hs.Add(hMCPredctionNPD0);
    hs.Draw("SAME HIST nostack");
@@ -108,15 +97,11 @@ void dcaFractionFitting(TH1* hData, TObjArray& mc,
    ltx.DrawLatexNDC(0.6, 0.6, label.c_str());
 
    double realFracNPD0 = fracNPD0/(fracNPD0+fracPD0);
-   // err = errNPD(1/total - 1/total * realFrac) cross product errPD/total * realFrac + 2 cov(fracNPD, fracPD)*partial f partial x * partial f partial y
-   double realFracNPD0Err = std::sqrt(std::pow(fracErrNPD0/(fracNPD0+fracPD0)*(1-realFracNPD0Err), 2) 
-         + std::pow(fracErrPD0/(fracNPD0+fracPD0)*realFracNPD0Err, 2)
-         + 2*covMat[0][1]*fracPD0/(fracNPD0+fracPD0)*(-1)*fracNPD0/(fracNPD0+fracPD0));
-   /*
-   double realFracNPD0 = fracNPD0;
-   double realFracNPD0Err = fracErrNPD0;
-   */
 
+   double realFracNPD0Err = std::sqrt(std::pow(fracErrNPD0/(fracNPD0+fracPD0)*(1-realFracNPD0), 2) 
+         + std::pow(fracErrPD0/(fracNPD0+fracPD0)*realFracNPD0, 2)
+         + 2*covMat[0][1]*fracPD0/(fracNPD0+fracPD0)*(-1)*fracNPD0/(fracNPD0+fracPD0));
+   std::cout << "error of non-prompt: " << realFracNPD0Err << std::endl;
 
    frac["fracNPD0"] = realFracNPD0;
    frac["fracNPD0Err"] = realFracNPD0Err;
@@ -124,12 +109,26 @@ void dcaFractionFitting(TH1* hData, TObjArray& mc,
    ltx.SetTextSize(0.035);
    ltx.DrawLatexNDC(0.55, 0.5, Form("B2D Frac. = %.2f+/-%.2f", realFracNPD0, realFracNPD0Err));
 
+   auto pad2 = cDca.cd(2);
+   pad2->SetBorderSize(0);
+   pad2->SetLeftMargin(0.16);
+   pad2->SetTopMargin(0);
+   pad2->SetBottomMargin(0.16);
+
+   TH1D* ratio = (TH1D*) hData->Clone();
+   ratio->SetName("name");
+   ratio->GetYaxis()->SetTitle("dN_{obs}/dN_{th}");
+   ratio->Divide(result);
+   ratio->Draw();
+
    cDca.Print(name["noLog"].c_str());
    cDca.SetLogy();
    cDca.Print(name["log"].c_str());
 
-   //std::cout << "chi2/ndf = " << fit.GetChisquare() << "/ " << fit.GetNDF() << std::endl;
-   //std::cout << "fit probability: " << fit.GetProb() << std::endl;
+   delete ratio;
+
+   std::cout << "chi2/ndf = " << fit.GetChisquare() << "/ " << fit.GetNDF() << std::endl;
+   std::cout << "fit probability: " << fit.GetProb() << std::endl;
 }
 
 void dcaFittingOptimal(int mode=2, int method = 0)
@@ -151,10 +150,9 @@ void dcaFittingOptimal(int mode=2, int method = 0)
       hD0DcaMCPSignal = (TH1D*) f1->Get(Form("hDcaMCPD0mva%d", label));
       hD0DcaMCNPSignal = (TH1D*) f1->Get(Form("hDcaMCNPD0mva%d", label));
 
-      // change the relative error of the MC distributions, to have a knowledge of how it effect on the fraction error
       for(int iDca=0; iDca<ana::nuofDca; iDca++){
-         //hD0DcaMCNPSignal->SetBinContent(iDca+1, 1e-8*hD0DcaMCNPSignal->GetBinContent(iDca+1));
-         //hD0DcaMCPSignal->SetBinContent(iDca+1, 1e-8*hD0DcaMCPSignal->GetBinContent(iDca+1));
+         //hD0DcaMCPSignal->SetBinError(iDca, 0);
+         //hD0DcaMCNPSignal->SetBinError(iDca, 0);
       }
 
       double yield_Data = hD0DcaData->Integral("width");
@@ -167,13 +165,6 @@ void dcaFittingOptimal(int mode=2, int method = 0)
       TH1D* hMassMCNPD0All = (TH1D*) f1->Get(Form("hMassMCNPD0Allmva%d", label));
       TH1D* hMassMCPD0 = (TH1D*) f1->Get(Form("hMassMCPD0mva%d", label));
       TH1D* hMassMCPD0All = (TH1D*) f1->Get(Form("hMassMCPD0Allmva%d", label));
-
-      //double massBinWidth = hMassData->GetBinWidth(1);
-      //hMassData->Scale(1./massBinWidth);
-      //hMassMCNPD0->Scale(1./massBinWidth);
-      //hMassMCNPD0All->Scale(1./massBinWidth);
-      //hMassMCPD0->Scale(1./massBinWidth);
-      //hMassMCPD0All->Scale(1./massBinWidth);
 
       // create Pic to store pictures
       const std::string dirPic = Form("if [ ! -d \"%sPic\" ]; then\n"
@@ -281,8 +272,6 @@ void dcaFittingOptimal(int mode=2, int method = 0)
          cSignal.SetLogy();
          cSignal.SetLeftMargin(0.16);
          cSignal.SetBottomMargin(0.16);
-         //hD0DcaData->Scale(1./hD0DcaData->Integral(1, hD0DcaData->GetXaxis()->GetNbins()));
-         //hD0DcaDataPeak->Scale(1./hD0DcaDataPeak->Integral(1, hD0DcaDataPeak->GetXaxis()->GetNbins()));
          hD0DcaDataPeak->Scale(hD0DcaData->GetMaximum()/hD0DcaDataPeak->GetMaximum());
          hD0DcaData->Draw();
          hD0DcaDataPeak->Draw("same");
@@ -296,17 +285,17 @@ void dcaFittingOptimal(int mode=2, int method = 0)
          cSignal.Print(Form("%sPic/mva%d/DcaComparison.png", ana::whichtree[mode].c_str(), iMva));
       }
       if(method == 1){
-         // following does not work
+         // the following cannot give correct results
          TCanvas cTemp("cTemp", "", 550, 450);
          RooRealVar x("x", "x", 0, 0.036);
-         RooRealVar fracNPD0("fracNPD0", "fracNPD0", 0.5);
+         RooRealVar fracNPD0("fracNPD0", "fracNPD0", 0.5, 0., 1.);
          RooDataHist hNP("hNP", "hNP", RooArgList(x), hD0DcaMCNPSignal);
          RooDataHist hP("hP", "hP", RooArgList(x), hD0DcaMCPSignal);
          RooDataHist hData("hData", "hData", RooArgList(x), hD0DcaData);
          RooHistPdf fNP("fNP", "fNP", x, hNP, 0);
          RooHistPdf fP("fP", "fP", x, hP, 0);
          RooAddPdf sum("sum", "NPD0+PD0", RooArgList(fNP, fP), RooArgList(fracNPD0));
-         sum.fitTo(hData, SumW2Error(kTRUE), Extended(kTRUE));
+         sum.fitTo(hData, SumW2Error(kTRUE));
          RooArgSet *parList = sum.getParameters(hData);
          parList->Print("v");
          cTemp.cd();

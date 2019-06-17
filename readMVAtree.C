@@ -69,15 +69,7 @@ void readMVAtree
    std::map<std::string, TH3*> dataDCA;
    dataDCA["hdata"] = new TH3D("hDcaVsMassAndMvaDataD0", "hDcaVsMassAndMvaDataD0", 60, 1.7, 2.0, 50, -0.3, 0.7, ana::nDca, ana::dcaMin, ana::dcaMax);
 
-   // open mc files
-/*
-   TChain *chain = new TChain("d0ana_mc/VertexCompositeNtuple");
-   TFileCollection* fc = new TFileCollection("dum", "", "newD0Signal.list");
-   chain->AddFileInfoList(fc->GetList());
-*/
-
-   // read trees and fill hisotgrams
-
+   // open mc prompt d0 files
    std::string mcPD0ChainStr(
                    TString::Format("%s_mc/VertexCompositeNtuple", ana::whichtree[mode].c_str()));
    TChain* mcPD0Chain = new TChain(mcPD0ChainStr.c_str());
@@ -85,12 +77,14 @@ void readMVAtree
    mcPD0Chain->AddFileInfoList(fcMCPD0->GetList());
    d0mc *mcPD0 = new d0mc(mcPD0Chain);
 
+   // read trees and fill hisotgrams
    std::cout << "started filling histograms of mc promptd0" << std::endl;
    loopTree(mcPD0, promptDCA, true);
    std::cout << "ended filling histograms of mc promptd0" << std::endl;
 
    delete mcPD0;
 
+   // open mc non-prompt d0 files
 
    std::string mcNPD0ChainStr(
                    TString::Format("%s_mc/VertexCompositeNtuple", ana::whichtree[mode].c_str()));
@@ -99,12 +93,14 @@ void readMVAtree
    mcNPD0Chain->AddFileInfoList(fcMCNPD0->GetList());
    d0mc *mcNPD0 = new d0mc(mcNPD0Chain);
 
+   // read trees and fill hisotgrams
    std::cout << "started filling histograms of mc non-prompt d0" << std::endl;
    loopTree(mcNPD0, nonPromptDCA, true);
    std::cout << "ended filling histograms of mc non-prompt d0" << std::endl;
 
    delete mcNPD0;
 
+   // open data files
    std::string dataD0ChainStr = 
                    Form("%s/VertexCompositeNtuple", ana::whichtree[mode].c_str());
    TChain* dataD0Chain= new TChain(dataD0ChainStr.c_str());
@@ -112,13 +108,12 @@ void readMVAtree
    dataD0Chain->AddFileInfoList(fcDataD0->GetList());
    d0data *dataD0 = new d0data(dataD0Chain);
 
-
+   // read trees and fill hisotgrams
    std::cout << "started filling histograms of data d0" << std::endl;
    loopTree(dataD0, dataDCA, false);
    std::cout << "ended filling histograms of data d0" << std::endl;
 
    delete dataD0;
-
    
    const std::string dirHists = Form("if [ ! -d \"hists\" ]; then\n"
                               "    mkdir hists \n"
@@ -210,11 +205,12 @@ bool passKinematicalCut(d0tree* d0)
    bool passTrkPtErr = d0->PtErrD1()/d0->PtD1() < 0.1 && d0->PtErrD2()/d0->PtD2() < 0.1;
    bool passTrkPurity = d0->highPurityD1() && d0->highPurityD2();
    bool passTrkNhits = d0->nHitD1() >=11 && d0->nHitD2() >=11; 
+   bool passDeltaEta = std::fabs(d0->etaD1() - d0->etaD2()) < 1;
 
    bool passMVA = d0->Mva() > 0.4;
    passMVA = true;
 
-   if(passPt && passY && passPointingAngle && passTrkEta 
+   if(passPt && passY && passPointingAngle && passTrkEta && passDeltaEta
          && passTrkPt && passTrkPtErr && passTrkPurity && passTrkNhits
          && passMVA
          ) return true;
