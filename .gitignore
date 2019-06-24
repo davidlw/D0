@@ -5,3 +5,7 @@
 *.png
 *.list
 *.txt
+*.list*
+*.err
+*.out
+*.log

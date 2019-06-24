@@ -39,7 +39,7 @@ void dcaFractionFitting(TH1* hData, TObjArray& mc,
    TFractionFitter fit(hD0DcaData, &mc);
    fit.Constrain(0, 0.0, 1.0);
    fit.Constrain(1, 0.0, 1.0);
-   fit.SetRangeX(1, 10);
+   fit.SetRangeX(1, 13);
    auto fitResultPtr = fit.Fit();
    auto covMat = fitResultPtr->GetCovarianceMatrix();
    covMat.Print();
@@ -122,7 +122,7 @@ void dcaFractionFitting(TH1* hData, TObjArray& mc,
    ratio->Draw();
 
    cDca.Print(name["noLog"].c_str());
-   cDca.SetLogy();
+   pad1->SetLogy();
    cDca.Print(name["log"].c_str());
 
    delete ratio;
